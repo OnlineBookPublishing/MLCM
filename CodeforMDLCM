@@ -1,0 +1,167 @@
+pragma solidity ^0.8.0;
+contract MedicalDeviceLifecycle {
+    address public manufacturer;
+    address public regulatoryBody;
+    address public healthcareProvider;
+    address public maintenanceProvider;
+    address public testingProvider;
+    address public surveillanceProvider;
+    address public transporter;
+
+string IPFShash_Manu;
+string IPFShash_MP;
+    enum DeviceState {Initiated,Manufactured, DeviceDetailsSubmitted, TestingDone, Approved, InTransit,InUse, MaintenanceRequired, MaintenanceDone, MaintenanceReportAdded,Decommissioned}
+    DeviceState public deviceState;
+    
+    // Hashes for device details and maintenance reports
+    string public deviceDetailsHash;
+    string public maintenanceReportHash;
+
+
+
+    uint numberOfMaintanenceRequestsByHCProviders;
+    uint numberOfMaintanenceCompletedByMaintenanceProvider;
+
+    event DeviceManufactured(address manufacturer, string deviceID);
+    event DeviceApproved(address regulatoryBody, string deviceID);
+    event DeviceInUse(address healthcareProvider, string deviceID);
+    event MaintenanceRequired(address maintenanceProvider, string deviceID);
+    event DeviceDecommissioned(address decommissioner, string deviceID);
+    event TestingCompleted(address testingProvider, string deviceID);
+    event MaintenancePerformed(address maintenanceProvider, string deviceID);
+    event SurveillanceInitiated(address surveillanceProvider, string deviceID);
+    event DeviceTransported(address transporter, string deviceID);
+
+        // Event for device-related actions
+    event DeviceDetailsSubmitted(address manufacturer, string info, string ipfsHash);
+    event MaintenanceReportAdded(address maintenanceProvider, string info, string ipfsHash);
+
+
+    modifier OnlyManufacturer() {
+        require(msg.sender == manufacturer);
+        _;
+    }
+
+    modifier OnlyRegulatoryBody() {
+        require(msg.sender == regulatoryBody);
+        _;
+    }
+
+    modifier OnlyHealthcareProvider() {
+        require(msg.sender == healthcareProvider);
+        _;
+    }
+
+    modifier OnlyMaintenanceProvider() {
+        require(msg.sender == maintenanceProvider);
+        _;
+    }
+
+    modifier OnlyTestingProvider() {
+        require(msg.sender == testingProvider);
+        _;
+    }
+
+    modifier OnlySurveillanceProvider() {
+        require(msg.sender == surveillanceProvider);
+        _;
+    }
+    
+    modifier OnlySupplyChainTransporter() {
+        require(msg.sender == transporter);
+        _;
+    }
+
+       constructor() {
+        manufacturer = msg.sender;
+        deviceState = DeviceState.Initiated;
+        manufacturer= 0x5B38Da6a701c568545dCfcB03FcB875f56beddC4;
+        regulatoryBody= 0xAb8483F64d9C6d1EcF9b849Ae677dD3315835cb2;
+        numberOfMaintanenceRequestsByHCProviders = 0;
+        numberOfMaintanenceCompletedByMaintenanceProvider=0;
+        IPFShash_Manu= "QmXgm5QVTy8pRtKrTPmoWPGXNesehCpP4jjFMTpvGamc1p";
+        IPFShash_MP= "QmXgm5QVTy8pRtKrTPmoWPGXNesehCpP4jjFMTpvGamc1p";
+
+        testingProvider=0x1aE0EA34a72D944a8C7603FfB3eC30a6669E454C;
+        transporter=0xdD870fA1b7C4700F2BD7f44238821C26f7392148;
+        maintenanceProvider = 0x617F2E2fD72FD9D5503197092aC168c91465E7f2;
+        surveillanceProvider = 0xCA35b7d915458EF540aDe6068dFe2F44E8fa733c;
+
+    }
+
+
+    function manufactureDevice(string memory deviceID, string memory docHash) public OnlyManufacturer {
+        require(deviceState == DeviceState.Initiated);
+        deviceState = DeviceState.Manufactured;
+        emit DeviceManufactured(msg.sender, deviceID);
+    }
+
+    function submitDeviceDetails(string memory ipfsHash) public OnlyManufacturer {
+        require(deviceState == DeviceState.Manufactured);
+        deviceDetailsHash = ipfsHash;
+        deviceState = DeviceState.DeviceDetailsSubmitted;
+        emit DeviceDetailsSubmitted(msg.sender, "Device details submitted", ipfsHash);
+    }
+
+      function completeTesting(string memory deviceID) public OnlyTestingProvider {
+        require(deviceState == DeviceState.DeviceDetailsSubmitted);
+        deviceState = DeviceState.TestingDone;
+        emit TestingCompleted(msg.sender, deviceID);
+    }
+
+    function approveDevice(string memory deviceID) public OnlyRegulatoryBody {
+        require(deviceState == DeviceState.TestingDone);
+        deviceState = DeviceState.Approved;
+        emit DeviceApproved(msg.sender, deviceID);
+    }
+    
+    function transportDevice(address transporterAddress, string memory deviceID) public OnlySupplyChainTransporter {
+        require(deviceState == DeviceState.Approved);
+        transporter = transporterAddress;
+        deviceState = DeviceState.InTransit;
+        emit DeviceTransported(msg.sender, deviceID);
+    }
+    function deployDevice(address healthcareProviderAddress,string memory deviceID)public OnlyManufacturer {
+        require(deviceState == DeviceState.InTransit);
+        healthcareProvider = healthcareProviderAddress;
+        deviceState = DeviceState.InUse;
+        emit DeviceInUse(healthcareProvider, deviceID);
+    }
+    // Healthcare provider 0x5c6B0f7Bf3E7ce046039Bd8FABdfD3f9F5021678
+
+    function requireMaintenance(string memory maintenanceReason, string memory deviceID) public OnlyHealthcareProvider {
+        require(deviceState == DeviceState.InUse);
+        numberOfMaintanenceRequestsByHCProviders+=1;
+        deviceState = DeviceState.MaintenanceRequired;
+        emit MaintenanceRequired(msg.sender, deviceID);
+    }
+
+    function provideMaintenance(string memory deviceID) public OnlyMaintenanceProvider {
+        require(deviceState == DeviceState.MaintenanceRequired);
+        numberOfMaintanenceCompletedByMaintenanceProvider+=1;
+        deviceState = DeviceState.MaintenanceDone;
+        emit MaintenancePerformed(msg.sender, deviceID);
+    }
+
+      // Function for the maintenance provider to add a report using IPFS
+    function addMaintenanceReport(string memory ipfsHash) public OnlyMaintenanceProvider {
+        require(deviceState == DeviceState.InUse || deviceState == DeviceState.MaintenanceDone);
+        maintenanceReportHash = ipfsHash;
+        deviceState = DeviceState.MaintenanceReportAdded;
+        emit MaintenanceReportAdded(msg.sender, "Maintenance report added", ipfsHash);
+    }
+
+
+
+    function decommissionDevice(string memory deviceID) public OnlyManufacturer {
+        require(deviceState == DeviceState.InUse || deviceState == DeviceState.MaintenanceRequired);
+        deviceState = DeviceState.Decommissioned;
+        emit DeviceDecommissioned(msg.sender, deviceID);
+    }   
+    function initiatePostMarketSurveillance(string memory deviceID) public OnlySurveillanceProvider {
+        require(deviceState == DeviceState.InUse);
+        emit SurveillanceInitiated(msg.sender, deviceID);
+    }
+
+      
+}
