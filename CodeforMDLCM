@@ -151,13 +151,47 @@ string IPFShash_MP;
         emit MaintenanceReportAdded(msg.sender, "Maintenance report added", ipfsHash);
     }
 
+bool public posesSeriousRisk;
+uint256 public criticalFaultsCount = 0;
+
+function assessRisk(string memory deviceID) internal view returns (bool) {
+    bool hasSafetyIssue = checkSafetyIssue(deviceID);
+    return hasSafetyIssue;
+}
+
+mapping(bytes32 => uint256) reportedIncidents;
+
+function checkSafetyIssue(string memory deviceID) internal view returns (bool) {
+    // Convert the deviceID to a bytes32 hash
+    bytes32 deviceHash = keccak256(abi.encodePacked(deviceID));
+
+    // Retrieve the number of reported incidents for the specific device
+    uint256 incidents = reportedIncidents[deviceHash];
+
+    // Example safety issue logic: Flag the device if it has more than 1 reported incident
+    return incidents > 1;
+}
 
 
-    function decommissionDevice(string memory deviceID) public OnlyManufacturer {
-        require(deviceState == DeviceState.InUse || deviceState == DeviceState.MaintenanceRequired);
-        deviceState = DeviceState.Decommissioned;
-        emit DeviceDecommissioned(msg.sender, deviceID);
-    }   
+function decommissionDevice(string memory deviceID) public OnlyManufacturer {
+    require(deviceState == DeviceState.MaintenanceReportAdded);
+
+    // Additional check for major issues using the defined functions
+    require(checkForCriticalFaults(deviceID) || assessRisk(deviceID));
+
+    deviceState = DeviceState.Decommissioned;
+    emit DeviceDecommissioned(msg.sender, deviceID);
+}
+
+function checkForCriticalFaults(string memory deviceID) internal view returns (bool) {
+    // Replace this with your logic to check for critical faults.
+    // For example, let's assume a critical fault occurs if the count
+    // of critical faults exceeds a predefined threshold (e.g., 3 faults).
+    return criticalFaultsCount >= 1;
+}
+
+
+
     function initiatePostMarketSurveillance(string memory deviceID) public OnlySurveillanceProvider {
         require(deviceState == DeviceState.InUse);
         emit SurveillanceInitiated(msg.sender, deviceID);
